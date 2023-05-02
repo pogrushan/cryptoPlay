@@ -11,7 +11,6 @@ import smtplib
 import requests
 from bs4 import BeautifulSoup
 import hashlib
-import cfscrape
 
 # Configure the properties file to get the DB credentials
 
@@ -214,13 +213,26 @@ def myHoldings():
   tasks = mycursor.fetchall()
 
   session["netWorth"] = 0
-
+  #get vcoins 
+  mycursor = conn.cursor()
+  sql = "SELECT balance from balances where username = " + "'" + session["email"] + "'"
+  mycursor.execute(sql)
+  vcoins = mycursor.fetchone()
+  
   body=""
   for k in tasks:
-    session["netWorth"] = session["netWorth"] + float(k[3])*getCoinPriceFromId(k[4]) + session["vcoins"]
-    body += "<div class='card'> <img src='"+ k[7] +"'> <h3>"+ k[5]+" ("+ k[6] +") </h3> <h4>Total Value(INR):- "+ str(round(float(k[3]), 2)*getCoinPriceFromId(k[4])) +"</h4> <a href=/buy/"+ str(k[4]) +"> <button class='buy'> Buy More </button> </a> <a href=/sell/"+ str(k[4]) +"> <button class='sell'> Sell </button> </a> </div> <br> <br>"  
+    session["netWorth"] = session["netWorth"] + float(k[3])*getCoinPriceFromId(k[4]) + vcoins
+    body += (
+      "<div class='card'>"
+      "<img src='" + k[7] + "'>"
+      "<h3>" + k[5] + " (" + k[6] + ")</h3>"
+      "<h4>Total Value(INR):- " + str(round(float(k[3]), 2) * getCoinPriceFromId(k[4])) + "</h4>"
+      "<a href=/buy/" + str(k[4]) + "><button class='buy'>Buy More</button></a>"
+      "<a href=/sell/" + str(k[4]) + "><button class='sell'>Sell</button></a>"
+      "</div><br><br>"
+    )
 
-  return render_template("myHoldings.html", vcoins = session["vcoins"], tasks=tasks, body=body, profileSeed=session["email"].split("@")[0], netWorth=round(session["netWorth"], 2))
+  return render_template("myHoldings.html", vcoins = vcoins, tasks=tasks, body=body, profileSeed=session["email"].split("@")[0], netWorth=round(session["netWorth"], 2))
 
 # This function is to log out the user
 
@@ -397,17 +409,15 @@ def sell(id):
 
 def getCoinPrice(coinName):
 
-  url = "https://www.coingecko.com/en/coins/" + coinName.lower() + "/inr"
-  scraper = cfscrape.create_scraper()
+  url = "https://www.coingecko.com/en/coins/"+ coinName.lower() +"/inr"
 
-  response = scraper.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+  response = requests.get(url)
   soup = BeautifulSoup(response.content, "html.parser")
+
   price = soup.find("span", class_="no-wrap").get_text()
 
   price = price.replace(",", "")
   price = price.replace("₹", "")
-  price = float(price)
-  price = round(price, 2)
   
   price = float(price)
   price = round(price, 2)
@@ -423,18 +433,16 @@ def getCoinPriceFromId(coinId):
 
   coinName = coin[1]
 
-  url = "https://www.coingecko.com/en/coins/" + coinName.lower() + "/inr"
-  scraper = cfscrape.create_scraper()
+  url = "https://www.coingecko.com/en/coins/"+ coinName.lower() +"/inr"
 
-  response = scraper.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+  response = requests.get(url)
   soup = BeautifulSoup(response.content, "html.parser")
+
   price = soup.find("span", class_="no-wrap").get_text()
 
   price = price.replace(",", "")
   price = price.replace("₹", "")
-  price = float(price)
-  price = round(price, 2)
-  
+
   price = float(price)
   price = round(price, 2)
 
@@ -526,7 +534,6 @@ def getCoinHoldings(username, coinId):
   holdings = mycursor.fetchone()
 
   #Adding try catch to handle the case when the user has no holdings of the coin
-  
   try:
     return holdings[3]
   except:
